@@ -1,0 +1,84 @@
+---
+title: "Machine Learnin Project - Human Activity Recognition"
+output: html_document
+---
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset)
+
+### Synopsis
+
+The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. Use any of the other variables to predict with. Create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+
+### Getting and Cleaning Data - Selecting Feature Variables
+
+Import the training and test data for the project
+
+```{r}
+train <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+test <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+```
+
+Looking into the test data set there are lots of complete NA variables which would not contribute to the prediction if used as feature variables. So these variables are removed from both train and test data sets. 
+
+```{r}
+dim(test)
+testnrow <- nrow(test)
+# variables with NAs in all rows
+NAcols <- names(test)[unlist(lapply(test, function(x) length(which(is.na(x)))==testnrow))]
+
+# remove NA variables from data sets
+test <- test[,-which(names(test) %in% NAcols)]
+train <- train[,-which(names(train) %in% NAcols)]
+str(train)
+```
+ID, timestamps and window variables are not related to movement and will not be included in the predictive feature set.
+```{r}
+train <- train[,-c(1:7)]
+test <- test[,-c(1:7)]
+dim(train)
+```
+
+### Model Selection
+
+The number of potential features for the model tarining was reduced from 159 to 53.
+
+```{r}
+summary(train$classe)
+```
+Since the dataset is pretty balanced between classes the random forest model was chosen for the prediction. Some of the other features why the random forest was chosen as the best fit:
+
+* Accuracy
+* Runs efficiently on large datasets
+* Handles thousands of input variables without variable deletion
+* Gives estimates of what variables are important in the classification
+* Generates an internal unbiased estimate of the generalization error as the forest building progresses
+
+```{r, warning=FALSE, message=FALSE}
+library(caret)
+library(randomForest)
+
+set.seed(111)
+modelFit <- train(train$classe ~ ., data=train, method="rf")
+```
+
+### Cross Validation
+
+**The out-of-bag (oob) error estimate**
+
+Proportion of times the result is not accurate averaged over all samples is the OOB error estimate. In random forests, there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error. It is estimated internally, during the run, as follows: [from source](http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr)
+
+```{r}
+modelFit
+```
+
+### Conclusion
+
+The random forest model gives a pretty good prediction of the exercise form that is based on movement data. The overall estimated out-of-bag error rate is 0.28%.
+
+```{r}
+varImpPlot(modelFit, n.var = 10, main="Top 10 Importance Features")
+```
+There’s two types of importance features shown above. The accuracy one tests to see how worse the model performs without each variable, so a high decrease in accuracy would be expected for very predictive variables. The Gini one digs into the mathematics behind decision trees, but essentially measures how pure the nodes are at the end of the tree. Again it tests to see the result if each variable is taken out and a high score means the variable was important.
+
